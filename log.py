@@ -29,7 +29,7 @@ def display_board(buildings, grid_scores, builders, agents):
     Logs the detailed board state with uniform formatting.
 
     Parameters:
-    - buildings (np.array): Grid of building types.
+    - buildings (np.array): Grid of building types (or dictionaries containing building info).
     - grid_scores (np.array): Grid of G, V, D scores.
     - builders (np.array): Grid of builder indices.
     - agents (list): List of agent names.
@@ -47,12 +47,15 @@ def display_board(buildings, grid_scores, builders, agents):
             if building is None:
                 cell_content = f"[X|G:{G}|V:{V}|D:{D}|B:NA]"
             else:
+                building_type = building["type"]  # Extract building type
                 builder_name = agents[builder_idx] if builder_idx != -1 else "None"
                 # Truncate builder name if it's too long
                 builder_name = (
                     builder_name[:4] if len(builder_name) > 4 else builder_name
                 )
-                cell_content = f"[{building[0]}|G:{G}|V:{V}|D:{D}|B:{builder_name}]"
+                cell_content = (
+                    f"[{building_type[0]}|G:{G}|V:{V}|D:{D}|B:{builder_name}]"
+                )
             # Pad the cell content to ensure uniform width
             cell_str_padded = cell_content.ljust(cell_width)
             row_cells.append(cell_str_padded)

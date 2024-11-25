@@ -98,40 +98,45 @@ class SimCityEnv(AECEnv):
 
         # Initialize reward for this step
         reward = 0
+        info_resources = {}
 
         # Decode action
         building_type, x, y = self.decode_action(action)
 
         # Check if the cell is empty
         if self.buildings[x][y] is not None:
+            # Cell already occupied: assign a penalty
             reward -= 5  # Example penalty
-            info_resources = {}
         else:
             building_cost = BUILDING_COSTS[building_type]
-            building_utility = BUILDING_UTILITIES[building_type]
-            building_effect = BUILDING_EFFECTS[building_type]
             player_resources = self.players[agent].resources
 
+            # Check if the player has enough resources for initial build
             if (
                 player_resources["money"] < building_cost["money"]
                 or player_resources["reputation"] < building_cost["reputation"]
             ):
-                reward -= 5  # Example penalty
-                info_resources = {}
+                # Not enough resources: assign a penalty
+                reward -= 5
             else:
+                # Deduct initial costs
                 player_resources["money"] -= building_cost["money"]
                 player_resources["reputation"] -= building_cost["reputation"]
 
-                player_resources["money"] += building_utility["money"]
-                player_resources["reputation"] += building_utility["reputation"]
-
-                self.buildings[x][y] = building_type
+                # Place the building
+                self.buildings[x][y] = {
+                    "type": building_type,
+                    "turn_built": self.num_moves,  # Track the turn it was built
+                }
                 self.builders[x][y] = self.agents.index(agent)
 
+                # Update the grid with building effects
+                building_effect = BUILDING_EFFECTS[building_type]
                 self.grid[x][y][0] += building_effect["G"]
                 self.grid[x][y][1] += building_effect["V"]
                 self.grid[x][y][2] += building_effect["D"]
 
+                # Apply effects to neighboring cells
                 for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
@@ -139,34 +144,54 @@ class SimCityEnv(AECEnv):
                         self.grid[nx][ny][1] += building_effect["neighbors"]["V"]
                         self.grid[nx][ny][2] += building_effect["neighbors"]["D"]
 
+                # Add immediate utility reward for the initial build
+                building_utility = BUILDING_UTILITIES[building_type]
                 reward += building_utility["money"] + building_utility["reputation"]
 
-                self.players[agent].self_score += reward
-
+                # Record the resource changes
                 info_resources = {
                     "money": -building_cost["money"] + building_utility["money"],
                     "reputation": -building_cost["reputation"]
                     + building_utility["reputation"],
                 }
 
+        # Apply ongoing building utilities (passive income or effects)
+        for x in range(self.grid_size):
+            for y in range(self.grid_size):
+                if self.buildings[x][y] is not None:
+                    building = self.buildings[x][y]
+                    building_type = building["type"]
+
+                    # Apply utilities for each building on the grid
+                    building_utility = BUILDING_UTILITIES[building_type]
+                    self.players[agent].resources["money"] += building_utility["money"]
+                    self.players[agent].resources["reputation"] += building_utility[
+                        "reputation"
+                    ]
+
+                    # Accumulate the passive utility in self_score
+                    reward += building_utility["money"] + building_utility["reputation"]
+
+        # Update player's self_score
+        self.players[agent].self_score += reward
+
         # Update cumulative reward for the agent
         self._cumulative_rewards[agent] += reward
 
-        # Prepare info to send to player
-        self.infos[agent]["resources"] = info_resources
-
-        # Update environment score
+        # Update the environment score
         self.env_score = self.calculate_environment_score()["env_score"]
 
-        # Update integrated_score for the agent
-        alpha, beta = 0.5, 0.5  # Default weights
+        # Update the agent's integrated score
+        alpha, beta = 0.5, 0.5  # Weights for self_score and environment score
         self.players[agent].integrated_score = (
             alpha * self.players[agent].self_score + beta * self.env_score
         )
 
-        # Update rewards and infos for PettingZoo
-        self.rewards[agent] = self._cumulative_rewards[agent]
-        self.infos[agent] = self.infos[agent]
+        # Log the environment score
+        log_environment_score(self.env_score)
+
+        # Prepare info to send to the player
+        self.infos[agent]["resources"] = info_resources
 
         # Check for game end conditions
         self.num_moves += 1
