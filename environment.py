@@ -2,24 +2,15 @@
 from pettingzoo.utils import AECEnv, agent_selector
 from gymnasium import spaces
 import numpy as np
-
-# Define building types
-BUILDING_TYPES = ["Park", "House", "Shop"]
-BUILDING_COSTS = {
-    "Park": {"money": 1, "reputation": 3},
-    "House": {"money": 2, "reputation": 2},
-    "Shop": {"money": 3, "reputation": 1},
-}
-BUILDING_UTILITIES = {
-    "Park": {"money": -1, "reputation": 3},
-    "House": {"money": 2, "reputation": 0},
-    "Shop": {"money": 3, "reputation": -1},
-}
-BUILDING_EFFECTS = {
-    "Park": {"G": 30, "V": -30, "D": 0, "neighbors": {"G": 10, "V": -10, "D": 0}},
-    "House": {"G": -30, "V": 0, "D": 30, "neighbors": {"G": -10, "V": 10, "D": 10}},
-    "Shop": {"G": -30, "V": 30, "D": -30, "neighbors": {"G": -10, "V": 10, "D": -10}},
-}
+import logging
+from players import BasePlayer, BalancedPlayer
+from config import BUILDING_TYPES, BUILDING_COSTS, BUILDING_UTILITIES, BUILDING_EFFECTS
+from log import (
+    display_current_turn,
+    display_board,
+    display_player_stats,
+    log_environment_score,
+)
 
 
 class SimCityEnv(AECEnv):
@@ -78,15 +69,15 @@ class SimCityEnv(AECEnv):
         self.infos = {agent: {} for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
-        self.players_resources = {
-            agent: {"money": 10, "reputation": 10} for agent in self.agents
-        }
-        self.env_score = self.calculate_environment_score()
+        # Initialize players_resources if needed, but players manage their own resources
+        # self.players_resources = {agent: {"money": 20, "reputation": 20} for agent in self.agents}
+        self.env_score = self.calculate_environment_score()["env_score"]
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self._agent_selector.reset()
         self.agent_selection = self._agent_selector.next()
         self.num_moves = 0
         self.has_reset = True  # Indicate that the environment is ready for a step
+        self.agent_index = 0
 
     def step(self, action):
         if not self.has_reset:
@@ -113,48 +104,34 @@ class SimCityEnv(AECEnv):
 
         # Check if the cell is empty
         if self.buildings[x][y] is not None:
-            # Invalid action: cell already occupied
-            # Assign a penalty
             reward -= 5  # Example penalty
+            info_resources = {}
         else:
-            # Valid action
-            # Get building details
             building_cost = BUILDING_COSTS[building_type]
             building_utility = BUILDING_UTILITIES[building_type]
             building_effect = BUILDING_EFFECTS[building_type]
+            player_resources = self.players[agent].resources
 
-            # Get player's resources
-            player_resources = self.players_resources[agent]
-
-            # Check if the player has enough resources
             if (
                 player_resources["money"] < building_cost["money"]
                 or player_resources["reputation"] < building_cost["reputation"]
             ):
-                # Not enough resources to build
-                # Assign a penalty
                 reward -= 5  # Example penalty
+                info_resources = {}
             else:
-                # Deduct resources
                 player_resources["money"] -= building_cost["money"]
                 player_resources["reputation"] -= building_cost["reputation"]
 
-                # Apply building utility
                 player_resources["money"] += building_utility["money"]
                 player_resources["reputation"] += building_utility["reputation"]
 
-                # Place the building
                 self.buildings[x][y] = building_type
-
-                # Record the builder
                 self.builders[x][y] = self.agents.index(agent)
 
-                # Update grid indices
                 self.grid[x][y][0] += building_effect["G"]
                 self.grid[x][y][1] += building_effect["V"]
                 self.grid[x][y][2] += building_effect["D"]
 
-                # Update adjacent cells
                 for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
@@ -162,13 +139,30 @@ class SimCityEnv(AECEnv):
                         self.grid[nx][ny][1] += building_effect["neighbors"]["V"]
                         self.grid[nx][ny][2] += building_effect["neighbors"]["D"]
 
-                # Assign rewards based on building's utility
-                # For simplicity, assign the utility as reward
-                # Adjust this based on self_score and environment_score
                 reward += building_utility["money"] + building_utility["reputation"]
+
+                self.players[agent].self_score += reward
+
+                info_resources = {
+                    "money": -building_cost["money"] + building_utility["money"],
+                    "reputation": -building_cost["reputation"]
+                    + building_utility["reputation"],
+                }
 
         # Update cumulative reward for the agent
         self._cumulative_rewards[agent] += reward
+
+        # Prepare info to send to player
+        self.infos[agent]["resources"] = info_resources
+
+        # Update environment score
+        self.env_score = self.calculate_environment_score()["env_score"]
+
+        # Update integrated_score for the agent
+        alpha, beta = 0.5, 0.5  # Default weights
+        self.players[agent].integrated_score = (
+            alpha * self.players[agent].self_score + beta * self.env_score
+        )
 
         # Update rewards and infos for PettingZoo
         self.rewards[agent] = self._cumulative_rewards[agent]
@@ -208,12 +202,12 @@ class SimCityEnv(AECEnv):
         V_avg = np.mean(self.grid[:, :, 1])
         D_avg = np.mean(self.grid[:, :, 2])
         env_score = (1 / 3) * G_avg + (1 / 3) * V_avg + (1 / 3) * D_avg
-        return env_score
+        return {"G_avg": G_avg, "V_avg": V_avg, "D_avg": D_avg, "env_score": env_score}
 
     def is_game_over(self):
         # Game ends when the board is filled or environment score < 10
         board_filled = np.all(self.buildings != None)
-        env_score = self.calculate_environment_score()
+        env_score = self.calculate_environment_score()["env_score"]
         if board_filled or env_score < 10:
             return True
         return False
@@ -222,7 +216,9 @@ class SimCityEnv(AECEnv):
         # Return the observation for the agent
         observation = {
             "grid": self.grid.copy(),
-            "resources": self.players_resources[agent].copy(),
+            "resources": self.players[
+                agent
+            ].resources.copy(),  # Use player's own resources
             "builders": self.builders.copy(),
         }
         return observation
@@ -255,3 +251,24 @@ class SimCityEnv(AECEnv):
         self.infos[self.agent_selection] = {}
         # Advance to the next agent
         self.agent_selection = self._agent_selector.next()
+
+    def get_observation(self, agent_id):
+        return self.observe(agent_id)
+
+    def run_game(self):
+        # Log initial state (Turn 0)
+        display_current_turn(self.num_moves, self.agents[self.agent_index])
+        display_board(self.buildings, self.grid, self.builders, self.agents)
+        display_player_stats(self.players)
+
+        while not self.is_game_over():
+            agent_id = self.agents[self.agent_index]
+            observation = self.get_observation(agent_id)
+            action = self.players[agent_id].select_action(observation)
+            self.step(action)
+            # Log current turn and board state
+            display_current_turn(self.num_moves, agent_id)
+            display_board(self.buildings, self.grid, self.builders, self.agents)
+            display_player_stats(self.players)
+            self.agent_index = (self.agent_index + 1) % len(self.agents)
+            log_environment_score(self.calculate_environment_score())

@@ -68,7 +68,23 @@ def display_player_stats(players):
     for player in players.values():
         log_message += f"{player.name}:\n"
         log_message += f"  Self Score: {player.self_score}\n"
-        log_message += f"  Final Score: {player.final_score}\n"
-        # Include any additional stats
-    log_message += "\n"
+        log_message += f"  Integrated Score: {player.integrated_score}\n"
+
+        if hasattr(player, "resources") and isinstance(player.resources, dict):
+            log_message += "  Resources:\n"
+            for resource, value in player.resources.items():
+                log_message += f"    {resource.capitalize():<12}: {value}\n"
+        else:
+            log_message += "  Resources: N/A\n"
+
+        log_message += "\n"
+
     logging.info(log_message)
+
+
+def log_environment_score(env_score):
+    """
+    Log the current environment score.
+    """
+    logging.info(f"Environment Score {env_score}")
+    logging.info(f"----------------------------------------\n")

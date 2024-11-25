@@ -173,4 +173,4 @@ Where: $\alpha = 0.5$ $\beta = 0.5$
 ## **游戏可视化**
 用字符画形式表达游戏棋盘信息
 以格式化文本方式输出 global environment score
-以格式化文本方式输出 每个玩家目前的资源, 收益, 该回合选择的动作, self_score 与 final_score
+以格式化文本方式输出 每个玩家目前的资源, 收益, 该回合选择的动作, self_score 与 intergrated_score
