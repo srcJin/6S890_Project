@@ -3,7 +3,6 @@
 import logging
 from environment import SimCityEnv
 from players import BalancedPlayer
-from log import display_current_turn, display_board, display_player_stats
 
 
 def main():

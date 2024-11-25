@@ -1,16 +1,9 @@
-### **Multiplayer SimCity Game Design Proposal**
----
-
-## **Game Overview**
+## **MVP Game Design Document**
 
 ### **Goals**
 1. Players (agents) need to take actions in a resource-constrained and dynamic environment by constructing different types of buildings to optimize their rewards.
 2. Each player pursues personal interests (such as money and reputation) while considering the global environment score to avoid the negative impact of environmental collapse.
 3. The game is designed to teach agents that cooperation can improve total scores in the long term while preserving enough competition to maintain complexity and strategic diversity.
-
----
-
-## **Core Game Mechanics**
 
 ---
 
@@ -41,6 +34,8 @@ Each grid cell is associated with the following three core indices, all represen
 ---
 
 ### **Building Types**
+
+Building are designed to affect both current cells and their surrounding cells.x
 
 ### **Park**
 - **Cost**
@@ -92,7 +87,15 @@ Each grid cell is associated with the following three core indices, all represen
 
 ---
 
-## **Player Design**
+
+
+### **Player Actions**
+Players take turns, and during their turn, they can perform the following actions:
+1. **Construct:** Spend money and reputation to place a building on an empty grid cell.
+
+---
+
+## **Player Strategies**
 
 ### **Player A: Economic Player**
 - **Traits:** Focuses on monetary rewards, pursuing short-term benefits through shop construction and high-vitality areas.
@@ -121,22 +124,6 @@ Each grid cell is associated with the following three core indices, all represen
 
 ---
 
-### **Player Actions**
-Players take turns, and during their turn, they can perform the following actions:
-1. **Construct:** Spend money and reputation to place a building on an empty grid cell.
-
----
-
-### **Player Strategies**
-
-**Baseline Strategy (Average)**
-   - Choose actions uniformly at random.
-
-**Short-Term Optimal Strategy**
-   - Choose the action that minimizes regret in the current round.
-
----
-
 ## **Scoring Mechanism**
 
 The environment score ($\text{Global Environment Score}$) is calculated based on the weighted averages of all grid cells:
@@ -156,37 +143,34 @@ Where $\alpha = 0.5$, $\beta = 0.5$.
 ---
 
 ### **Game End Condition**
-The game ends when the board is filled.
+The game ends when the board is filled or a maximum turn reached.
 
 ---
 
 ### **Evaluation**
-After the game ends, each player’s contribution to their objectives and the overall goals is evaluated. There is no singular "winner" in this game.
+After the game ends, each player’s contribution to their objectives and the overall goals is evaluated. There is no defined "winner" in this game.
 
 ---
 
-## **Multi-Agent Game Design**
+## **Multi-Agent Learning Objectives**
 
-### **Learning Objectives**
-1. **Learning Cooperation:**
+1. **Cooperation:**
    - Agents need to balance environmental scores and personal scores to learn cooperation in specific scenarios.
-2. **Competition and Blocking:**
+2. **Competition or Blocking:**
    - Agents can choose competitive strategies to reduce other players’ rewards and gain advantages.
 
 ---
 
 ## **Game Dynamics and Experimental Directions**
-We aim to calculate each player’s optimal strategy and find the **Course Correlated Equilibrium**.
+We aim to calculate each player’s optimal strategy and find the Course Correlated Equilibrium.
 
 ### **Evaluation Metrics**
-1. **Cooperation Degree:** Proportion of actions that benefit the environment.
-2. **Reward Distribution:** Observation of the final reward distribution among players.
-3. **Strategy Diversity:** Differentiation between strategies adopted by agents.
+1. **Cumulative Score for each player**
+2. **Cooperation Degree:** Proportion of actions that benefit the environment.
 
 ---
 
 ## **Game Visualization**
-1. **Grid Visualization:** Represent the game board with character graphics.
-2. **Formatted Outputs:**
-   - Display the global environment score.
+   - Display the global environment score in each step.
    - Show each player's current resources, earnings, selected action, self\_score, and final\_score in a structured format.
+   - Display the game board in text
